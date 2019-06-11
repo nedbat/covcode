@@ -260,6 +260,13 @@ class HtmlReporter(Reporter):
                     )
             elif lineno in analysis.statements:
                 line_class.append(c_run)
+            elif self.config.html_docstr:
+                # count docstring line as "executed"
+                # doctest SKIP directives will not
+                # prevent a line from being marked
+                # as executed, but will influence
+                # the associated source code proper
+                line_class.append(c_run)
 
             # Build the HTML for the line.
             html = []
