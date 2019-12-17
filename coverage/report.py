@@ -65,7 +65,7 @@ class Reporter(object):
         self._file_reporters = sorted(reporters)
         return self._file_reporters
 
-    def report_files(self, report_fn, morfs, directory=None):
+    def report_files(self, report_fn, morfs, directory=None, lcov_file=None):
         """Run a reporting function on a number of morfs.
 
         `report_fn` is called for each relative morf in `morfs`.  It is called
@@ -88,7 +88,7 @@ class Reporter(object):
 
         for fr in file_reporters:
             try:
-                report_fn(fr, self.coverage._analyze(fr))
+                report_fn(fr, self.coverage._analyze(fr), lcov_file=lcov_file)
             except NoSource:
                 if not self.config.ignore_errors:
                     raise

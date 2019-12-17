@@ -23,7 +23,7 @@ from coverage.data import CoverageData, CoverageDataFiles
 from coverage.debug import DebugControl, write_formatted_info
 from coverage.files import TreeMatcher, FnmatchMatcher
 from coverage.files import PathAliases, find_python_files, prep_patterns
-from coverage.files import canonical_filename, set_relative_directory
+from coverage.files import canonical_filename, set_relative_directory, unicode_filename
 from coverage.files import ModuleMatcher, abs_file
 from coverage.html import HtmlReporter
 from coverage.misc import CoverageException, bool_or_none, join_regex
@@ -58,6 +58,17 @@ if env.PYPY:
         import _pypy_irc_topic
     except ImportError:
         pass
+
+# Note
+# This log might be lost when called in atexit functions. In some
+# tests sys.stderr is closed when the atexit handler is called. At that
+# point we have to discard the message because otherwise it causes an
+# immediate exit with error code 1.
+def coverage_log(str):
+  """Write to stderr the provided string, if stderr is still open."""
+  if sys.stderr.closed:
+    return
+  sys.stderr.write(str + '\n')
 
 
 class Coverage(object):
@@ -623,7 +634,7 @@ class Coverage(object):
             msg = "%s (%s)" % (msg, slug)
         if self.debug.should('pid'):
             msg = "[%d] %s" % (os.getpid(), msg)
-        sys.stderr.write("Coverage.py warning: %s\n" % msg)
+        coverage_log("Coverage.py warning: %s" % msg)
 
     def get_option(self, option_name):
         """Get an option from the configuration.
@@ -715,6 +726,18 @@ class Coverage(object):
             self.stop()
         if self._auto_save:
             self.save()
+            lcov_filename = os.environ.get('PYTHON_LCOV_FILE')
+            if lcov_filename:
+                try:
+                    with open(lcov_filename, 'w') as lcov_file:
+                        try:
+                            self.annotate(lcov_file=lcov_file,
+                                          ignore_errors=True)
+                        except CoverageException as e:
+                            coverage_log('Coverage error %s'% e)
+                except IOError as e:
+                    coverage_log('Error (%s) creating lcov file %s' %
+                                (e.strerror, lcov_filename))
 
     def erase(self):
         """Erase previously-collected coverage data.
@@ -1016,7 +1039,7 @@ class Coverage(object):
     def report(
         self, morfs=None, show_missing=None, ignore_errors=None,
         file=None,                  # pylint: disable=redefined-builtin
-        omit=None, include=None, skip_covered=None,
+        omit=None, include=None, skip_covered=None, lcov_file=None
     ):
         """Write a summary report to `file`.
 
@@ -1038,11 +1061,11 @@ class Coverage(object):
             show_missing=show_missing, skip_covered=skip_covered,
             )
         reporter = SummaryReporter(self, self.config)
-        return reporter.report(morfs, outfile=file)
+        return reporter.report(morfs, outfile=file, lcov_file=lcov_file)
 
     def annotate(
         self, morfs=None, directory=None, ignore_errors=None,
-        omit=None, include=None,
+        omit=None, include=None, lcov_file=None,
     ):
         """Annotate a list of modules.
 
@@ -1059,11 +1082,11 @@ class Coverage(object):
             ignore_errors=ignore_errors, report_omit=omit, report_include=include
             )
         reporter = AnnotateReporter(self, self.config)
-        reporter.report(morfs, directory=directory)
+        reporter.report(morfs, directory=directory, lcov_file=lcov_file)
 
     def html_report(self, morfs=None, directory=None, ignore_errors=None,
                     omit=None, include=None, extra_css=None, title=None,
-                    skip_covered=None):
+                    skip_covered=None, lcov_file=None):
         """Generate an HTML report.
 
         The HTML is written to `directory`.  The file "index.html" is the
@@ -1092,7 +1115,7 @@ class Coverage(object):
 
     def xml_report(
         self, morfs=None, outfile=None, ignore_errors=None,
-        omit=None, include=None,
+        omit=None, include=None, lcov_file=None,
     ):
         """Generate an XML report of coverage results.
 

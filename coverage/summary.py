@@ -18,7 +18,7 @@ class SummaryReporter(Reporter):
         super(SummaryReporter, self).__init__(coverage, config)
         self.branches = coverage.data.has_arcs()
 
-    def report(self, morfs, outfile=None):
+    def report(self, morfs, outfile=None, lcov_file=None):
         """Writes a report summarizing coverage statistics per module.
 
         `outfile` is a file object to write the summary to. It must be opened

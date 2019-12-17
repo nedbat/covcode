@@ -51,6 +51,14 @@ def relative_filename(filename):
     return unicode_filename(filename)
 
 
+def get_filename_from_cf(cf):
+    """Return the reverse mapping of canonical_filename."""
+    for f in CANONICAL_FILENAME_CACHE.keys():
+        if CANONICAL_FILENAME_CACHE[f] == cf and not f == cf:
+            return f
+    return None
+
+
 @contract(returns='unicode')
 def canonical_filename(filename):
     """Return a canonical file name for `filename`.

@@ -70,6 +70,11 @@ class Opts(object):
             "Accepts shell-style wildcards, which must be quoted."
         ),
     )
+    lcov = optparse.make_option(
+        '-l', '--lcov', action='store', dest="lcov_file",
+        metavar="OUTFILE",
+        help="report in lcov format"
+    )
     pylib = optparse.make_option(
         '-L', '--pylib', action='store_true',
         help=(
@@ -271,6 +276,7 @@ CMDS = {
             Opts.ignore_errors,
             Opts.include,
             Opts.omit,
+            Opts.lcov,
             ] + GLOBAL_ARGS,
         usage="[options] [modules]",
         description=(
@@ -363,6 +369,7 @@ CMDS = {
             Opts.parallel_mode,
             Opts.source,
             Opts.timid,
+            Opts.lcov,
             ] + GLOBAL_ARGS,
         usage="[options] <pyfile> [program options]",
         description="Run a Python program, measuring code execution."
@@ -499,11 +506,18 @@ class CoverageScript(object):
             return OK
 
         # Remaining actions are reporting, with some common options.
+        if options.lcov_file:
+          lcovfile = open(options.lcov_file, "w")
+        else:
+          print("No Report generated: missing --lcov=<file> argument")
+          return ERR
+
         report_args = dict(
             morfs=unglob_args(args),
             ignore_errors=options.ignore_errors,
             omit=omit,
             include=include,
+            lcov_file = lcovfile,
             )
 
         self.coverage.load()
