@@ -15,6 +15,9 @@ if env.PY2:
     YIELD_VALUE = chr(YIELD_VALUE)
 
 
+HAS_F_TRACE_LINES = sys.version_info >= (3, 7)
+
+
 class PyTracer(object):
     """Python implementation of the raw data tracer."""
 
@@ -141,6 +144,9 @@ class PyTracer(object):
                 if tracename not in self.data:
                     self.data[tracename] = {}
                 self.cur_file_dict = self.data[tracename]
+            else:
+                if HAS_F_TRACE_LINES:
+                    frame.f_trace_lines = False
             # The call event is really a "start frame" event, and happens for
             # function calls and re-entering generators.  The f_lasti field is
             # -1 for calls, and a real offset for generators.  Use <0 as the
