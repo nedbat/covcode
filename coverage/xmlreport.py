@@ -149,7 +149,7 @@ class XmlReporter(object):
         # Create the 'lines' and 'package' XML elements, which
         # are populated later.  Note that a package == a directory.
         filename = fr.filename.replace("\\", "/")
-        for source_path in self.source_paths:
+        for source_path in sorted(self.source_paths, key=len):
             source_path = files.canonical_filename(source_path)
             if filename.startswith(source_path.replace("\\", "/") + "/"):
                 rel_name = filename[len(source_path)+1:]
