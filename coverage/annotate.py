@@ -64,6 +64,7 @@ class AnnotateReporter(object):
         statements = sorted(analysis.statements)
         missing = sorted(analysis.missing)
         excluded = sorted(analysis.excluded)
+        missing_branches = sorted(analysis.missing_branch_arcs().keys())
 
         if self.directory:
             ensure_dir(self.directory)
@@ -101,7 +102,10 @@ class AnnotateReporter(object):
                 elif lineno in excluded:
                     dest.write(u'- ')
                 elif covered:
-                    dest.write(u'> ')
+                    if lineno in missing_branches:
+                        dest.write(u'~ ')
+                    else:
+                        dest.write(u'> ')
                 else:
                     dest.write(u'! ')
 
