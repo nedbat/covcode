@@ -64,6 +64,7 @@ class AnnotateReporter(object):
         statements = sorted(analysis.statements)
         missing = sorted(analysis.missing)
         excluded = sorted(analysis.excluded)
+        missing_branches = sorted(analysis.missing_branch_arcs().keys())
 
         if self.directory:
             ensure_dir(self.directory)
@@ -75,34 +76,18 @@ class AnnotateReporter(object):
             dest_file = fr.filename + ",cover"
 
         with io.open(dest_file, 'w', encoding='utf8') as dest:
-            i = 0
-            j = 0
-            covered = True
             source = fr.source()
             for lineno, line in enumerate(source.splitlines(True), start=1):
-                while i < len(statements) and statements[i] < lineno:
-                    i += 1
-                while j < len(missing) and missing[j] < lineno:
-                    j += 1
-                if i < len(statements) and statements[i] == lineno:
-                    covered = j >= len(missing) or missing[j] > lineno
-                if self.blank_re.match(line):
-                    dest.write(u'  ')
-                elif self.else_re.match(line):
-                    # Special logic for lines containing only 'else:'.
-                    if i >= len(statements) and j >= len(missing):
-                        dest.write(u'! ')
-                    elif i >= len(statements) or j >= len(missing):
-                        dest.write(u'> ')
-                    elif statements[i] == missing[j]:
-                        dest.write(u'! ')
-                    else:
-                        dest.write(u'> ')
-                elif lineno in excluded:
+                # if lineno in analysis.statements:
+                #     line_class.append("stm")
+                if lineno in excluded:
                     dest.write(u'- ')
-                elif covered:
+                elif lineno in missing:
+                    dest.write(u'! ')
+                elif lineno in missing_branches:
+                    dest.write(u'~ ')
+                elif lineno in statements:
                     dest.write(u'> ')
                 else:
-                    dest.write(u'! ')
-
+                    dest.write('  ')
                 dest.write(line)
