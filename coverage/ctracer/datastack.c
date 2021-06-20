@@ -45,6 +45,9 @@ DataStack_grow(Stats *pstats, DataStack *pdata_stack)
 
         pdata_stack->stack = bigger_data_stack;
         pdata_stack->alloc = bigger;
+    } else {
+        /* Zero the entry, because it may have been previously used and can still contain data. */
+        memset(pdata_stack->stack + pdata_stack->depth, 0, sizeof(DataStackEntry));
     }
     return RET_OK;
 }

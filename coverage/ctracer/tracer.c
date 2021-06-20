@@ -278,6 +278,53 @@ error:
  * Parts of the trace function.
  */
 
+static void
+CTracer_line_number_range(CTracer *self, PyFrameObject *frame, int lineno, int *lineno_from, int *lineno_to)
+{
+    if (self->pcur_entry->file_tracer == Py_None) {
+        *lineno_from = *lineno_to = lineno;
+        return;
+    }
+
+    PyObject * from_to = NULL;
+    PyObject * pyint = NULL;
+
+    int f_lineno = PyFrame_GetLineNumber(frame);
+    if (lineno != f_lineno) {
+        /* Tracers look at f_lineno, so that's where we store the line number we want them to see. */
+        frame->f_lineno = lineno;
+    }
+
+    STATS( self->stats.pycalls++; )
+    from_to = PyObject_CallMethodObjArgs(self->pcur_entry->file_tracer, str_line_number_range, frame, NULL);
+    frame->f_lineno = f_lineno;
+    if (from_to == NULL) {
+        goto error;
+    }
+    if (!PyTuple_Check(from_to) || PyTuple_Size(from_to) != 2) {
+        PyErr_SetString(
+            PyExc_TypeError,
+            "line_number_range must return 2-tuple"
+            );
+        goto error;
+    }
+    pyint = PyTuple_GetItem(from_to, 0);
+    if (pyint == NULL || pyint_as_int(pyint, lineno_from) < 0) {
+        goto error;
+    }
+    pyint = PyTuple_GetItem(from_to, 1);
+    if (pyint == NULL || pyint_as_int(pyint, lineno_to) < 0) {
+        goto error;
+    }
+    goto cleanup;
+
+error:
+    CTracer_disable_plugin(self, self->pcur_entry->disposition);
+
+cleanup:
+    Py_XDECREF(from_to);
+}
+
 static int
 CTracer_check_missing_return(CTracer *self, PyFrameObject *frame)
 {
@@ -301,8 +348,12 @@ CTracer_check_missing_return(CTracer *self, PyFrameObject *frame)
             }
             if (self->pdata_stack->depth >= 0) {
                 if (self->tracing_arcs && self->pcur_entry->file_data) {
-                    if (CTracer_record_pair(self, self->pcur_entry->last_line, -self->last_exc_firstlineno) < 0) {
-                        goto error;
+                    int lineno_from = 0, lineno_to = 0;
+                    CTracer_line_number_range(self, frame, self->last_exc_firstlineno, &lineno_from, &lineno_to);
+                    if (lineno_from > 0) {
+                        if (CTracer_record_pair(self, self->pcur_entry->last_line, -lineno_from) < 0) {
+                            goto error;
+                        }
                     }
                 }
                 SHOWLOG(self->pdata_stack->depth, PyFrame_GetLineNumber(frame), frame->f_code->co_filename, "missedreturn");
@@ -548,11 +599,16 @@ CTracer_handle_call(CTracer *self, PyFrameObject *frame)
      * re-entering a generator also.  f_lasti is -1 for a true call, and a
      * real byte offset for a generator re-entry.
      */
-    if (frame->f_lasti < 0) {
-        self->pcur_entry->last_line = -frame->f_code->co_firstlineno;
-    }
-    else {
-        self->pcur_entry->last_line = PyFrame_GetLineNumber(frame);
+    if (self->tracing_arcs && self->pcur_entry->file_data) {
+        int lineno_from = 0, lineno_to = 0;
+        if (frame->f_lasti < 0) {
+            CTracer_line_number_range(self, frame, frame->f_code->co_firstlineno, &lineno_from, &lineno_to);
+        } else {
+            CTracer_line_number_range(self, frame, PyFrame_GetLineNumber(frame), &lineno_from, &lineno_to);
+        }
+        if (lineno_from > 0) {
+            self->pcur_entry->last_line = frame->f_lasti < 0 ? -lineno_from : lineno_from;
+        }
     }
 
 ok:
@@ -574,6 +630,9 @@ CTracer_disable_plugin(CTracer *self, PyObject * disposition)
     PyObject * ret;
     PyErr_Print();
 
+    self->pcur_entry->file_data = NULL;
+    self->pcur_entry->file_tracer = Py_None;
+
     STATS( self->stats.pycalls++; )
     ret = PyObject_CallFunctionObjArgs(self->disable_plugin, disposition, NULL);
     if (ret == NULL) {
@@ -591,40 +650,6 @@ error:
     PyErr_Print();
 }
 
-
-static int
-CTracer_unpack_pair(CTracer *self, PyObject *pair, int *p_one, int *p_two)
-{
-    int ret = RET_ERROR;
-    int the_int;
-    PyObject * pyint = NULL;
-    int index;
-
-    if (!PyTuple_Check(pair) || PyTuple_Size(pair) != 2) {
-        PyErr_SetString(
-            PyExc_TypeError,
-            "line_number_range must return 2-tuple"
-            );
-        goto error;
-    }
-
-    for (index = 0; index < 2; index++) {
-        pyint = PyTuple_GetItem(pair, index);
-        if (pyint == NULL) {
-            goto error;
-        }
-        if (pyint_as_int(pyint, &the_int) < 0) {
-            goto error;
-        }
-        *(index == 0 ? p_one : p_two) = the_int;
-    }
-
-    ret = RET_OK;
-
-error:
-    return ret;
-}
-
 static int
 CTracer_handle_line(CTracer *self, PyFrameObject *frame)
 {
@@ -635,36 +660,17 @@ CTracer_handle_line(CTracer *self, PyFrameObject *frame)
     if (self->pdata_stack->depth >= 0) {
         SHOWLOG(self->pdata_stack->depth, PyFrame_GetLineNumber(frame), frame->f_code->co_filename, "line");
         if (self->pcur_entry->file_data) {
-            int lineno_from = -1;
-            int lineno_to = -1;
-
-            /* We're tracing in this frame: record something. */
-            if (self->pcur_entry->file_tracer != Py_None) {
-                PyObject * from_to = NULL;
-                STATS( self->stats.pycalls++; )
-                from_to = PyObject_CallMethodObjArgs(self->pcur_entry->file_tracer, str_line_number_range, frame, NULL);
-                if (from_to == NULL) {
-                    CTracer_disable_plugin(self, self->pcur_entry->disposition);
-                    goto ok;
-                }
-                ret2 = CTracer_unpack_pair(self, from_to, &lineno_from, &lineno_to);
-                Py_DECREF(from_to);
-                if (ret2 < 0) {
-                    CTracer_disable_plugin(self, self->pcur_entry->disposition);
-                    goto ok;
-                }
-            }
-            else {
-                lineno_from = lineno_to = PyFrame_GetLineNumber(frame);
-            }
-
-            if (lineno_from != -1) {
+            /* We're tracing in this frame: try to record something. */
+            int lineno_from = 0, lineno_to = 0;
+            CTracer_line_number_range(self, frame, PyFrame_GetLineNumber(frame), &lineno_from, &lineno_to);
+            if (lineno_from > 0) {
                 for (; lineno_from <= lineno_to; lineno_from++) {
                     if (self->tracing_arcs) {
                         /* Tracing arcs: key is (last_line,this_line). */
                         if (CTracer_record_pair(self, self->pcur_entry->last_line, lineno_from) < 0) {
                             goto error;
                         }
+                        self->pcur_entry->last_line = lineno_from;
                     }
                     else {
                         /* Tracing lines: key is simply this_line. */
@@ -679,14 +685,11 @@ CTracer_handle_line(CTracer *self, PyFrameObject *frame)
                             goto error;
                         }
                     }
-
-                    self->pcur_entry->last_line = lineno_from;
                 }
             }
         }
     }
 
-ok:
     ret = RET_OK;
 
 error:
@@ -721,9 +724,12 @@ CTracer_handle_return(CTracer *self, PyFrameObject *frame)
                 bytecode = PyBytes_AS_STRING(pCode)[lasti];
             }
             if (bytecode != YIELD_VALUE) {
-                int first = frame->f_code->co_firstlineno;
-                if (CTracer_record_pair(self, self->pcur_entry->last_line, -first) < 0) {
-                    goto error;
+                int lineno_from = 0, lineno_to = 0;
+                CTracer_line_number_range(self, frame, frame->f_code->co_firstlineno, &lineno_from, &lineno_to);
+                if (lineno_from > 0) {
+                    if (CTracer_record_pair(self, self->pcur_entry->last_line, -lineno_from) < 0) {
+                        goto error;
+                    }
                 }
             }
         }
@@ -936,7 +942,7 @@ CTracer_call(CTracer *self, PyObject *args, PyObject *kwds)
     #endif
 
     /* Save off the frame's lineno, and use the forced one, if provided. */
-    orig_lineno = frame->f_lineno;
+    orig_lineno = PyFrame_GetLineNumber(frame);
     if (lineno > 0) {
         frame->f_lineno = lineno;
     }

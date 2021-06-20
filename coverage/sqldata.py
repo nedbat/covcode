@@ -916,7 +916,7 @@ class CoverageData(SimpleReprMixin):
 
         Negative numbers have special meaning.  If the starting line number is
         -N, it represents an entry to the code object that starts at line N.
-        If the ending ling number is -N, it's an exit from the code object that
+        If the ending line number is -N, it's an exit from the code object that
         starts at line N.
 
         """

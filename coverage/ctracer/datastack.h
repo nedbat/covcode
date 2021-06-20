@@ -22,7 +22,8 @@ typedef struct DataStackEntry {
     PyObject * file_tracer;
 
     /* The line number of the last line recorded, for tracing arcs.
-        -1 means there was no previous line, as when entering a code object.
+       0 means there was no previous line.
+       A negative number -N means we've just entered the code object which starts at line N.
     */
     int last_line;
 
