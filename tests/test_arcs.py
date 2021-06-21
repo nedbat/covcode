@@ -512,6 +512,20 @@ class LoopArcTest(CoverageTest):
             arcz=".1 -22 2-2 12 23 34 45 53 3.",
         )
 
+    def test_generator_expression_another_way(self):
+        # Generator expression:
+        self.check_coverage("""\
+            o = ((1,2), (3,4))
+            o = (a for
+                 a in
+                 o)
+            for tup in o:
+                x = tup[0]
+                y = tup[1]
+            """,
+            arcz=".1 -22 2-2 12 25 56 67 75 5.",
+        )
+
     def test_other_comprehensions(self):
         # Set comprehension:
         self.check_coverage("""\
