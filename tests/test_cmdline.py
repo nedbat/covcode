@@ -31,29 +31,29 @@ class BaseCmdLineTest(CoverageTest):
     # uses when calling the function.
     _defaults = mock.Mock()
     _defaults.Coverage().annotate(
-        directory=None, ignore_errors=None, include=None, omit=None, morfs=[],
+        directory=None, ignore_errors=False, include=None, omit=None, morfs=[],
         contexts=None,
     )
     _defaults.Coverage().html_report(
-        directory=None, ignore_errors=None, include=None, omit=None, morfs=[],
-        skip_covered=None, show_contexts=None, title=None, contexts=None,
-        skip_empty=None, precision=None,
+        directory=None, ignore_errors=False, include=None, omit=None, morfs=[],
+        skip_covered=False, show_contexts=False, title=None, contexts=None,
+        skip_empty=False, precision=None,
     )
     _defaults.Coverage().report(
-        ignore_errors=None, include=None, omit=None, morfs=[],
-        show_missing=None, skip_covered=None, contexts=None, skip_empty=None, precision=None,
+        ignore_errors=False, include=None, omit=None, morfs=[],
+        show_missing=False, skip_covered=False, contexts=None, skip_empty=False, precision=None,
         sort=None,
     )
     _defaults.Coverage().xml_report(
-        ignore_errors=None, include=None, omit=None, morfs=[], outfile=None,
-        contexts=None, skip_empty=None,
+        ignore_errors=False, include=None, omit=None, morfs=[], outfile=None,
+        contexts=None, skip_empty=False,
     )
     _defaults.Coverage().json_report(
-        ignore_errors=None, include=None, omit=None, morfs=[], outfile=None,
-        contexts=None, pretty_print=None, show_contexts=None,
+        ignore_errors=False, include=None, omit=None, morfs=[], outfile=None,
+        contexts=None, pretty_print=False, show_contexts=False,
     )
     _defaults.Coverage(
-        cover_pylib=None, data_suffix=None, timid=None, branch=None,
+        cover_pylib=False, data_suffix=False, timid=False, branch=False,
         config_file=True, source=None, include=None, omit=None, debug=None,
         concurrency=None, check_preimported=True, context=None,
     )
@@ -80,7 +80,7 @@ class BaseCmdLineTest(CoverageTest):
         return mk
 
     # Global names in cmdline.py that will be mocked during the tests.
-    MOCK_GLOBALS = ['Coverage', 'PyRunner', 'show_help']
+    MOCK_GLOBALS = ['Coverage', 'PyRunner']
 
     def mock_command_line(self, args, options=None):
         """Run `args` through the command line, with a Mock.
@@ -149,7 +149,7 @@ class BaseCmdLineTest(CoverageTest):
             pp2 = pprint.pformat(m2.mock_calls)
             assert pp1+'\n' == pp2+'\n'
 
-    def cmd_help(self, args, help_msg=None, topic=None, ret=ERR):
+    def cmd_outputs(self, args, output, ret=ERR):
         """Run a command line, and check that it prints the right help.
 
         Only the last function call in the mock is checked, which should be the
@@ -158,11 +158,10 @@ class BaseCmdLineTest(CoverageTest):
         """
         mk, status = self.mock_command_line(args)
         assert status == ret, f"Wrong status: got {status}, wanted {ret}"
-        if help_msg:
-            assert mk.mock_calls[-1] == ('show_help', (help_msg,), {})
-        else:
-            assert mk.mock_calls[-1] == ('show_help', (), {'topic': topic})
-
+        cmd_out, cmd_err = self.stdouterr()
+        assert output in cmd_out + cmd_err, (
+            f"output doesn't contain {output}:\nOut:\n{cmd_out}\nErr:\n{cmd_err}"
+        )
 
 class BaseCmdLineTestTest(BaseCmdLineTest):
     """Tests that our BaseCmdLineTest helpers work."""
@@ -170,7 +169,7 @@ class BaseCmdLineTestTest(BaseCmdLineTest):
         # All the other tests here use self.cmd_executes_same in successful
         # ways, so here we just check that it fails.
         with pytest.raises(AssertionError):
-            self.cmd_executes_same("run", "debug")
+            self.cmd_executes_same("run", "debug premain")
 
 
 class CmdLineTest(BaseCmdLineTest):
@@ -249,21 +248,21 @@ class CmdLineTest(BaseCmdLineTest):
             """)
 
     def test_debug(self):
-        self.cmd_help("debug", "What information would you like: config, data, sys, premain?")
-        self.cmd_help("debug foo", "Don't know what you mean by 'foo'")
+        self.cmd_outputs("debug", "the following arguments are required: topic")
+        self.cmd_outputs("debug foo", "argument topic: invalid choice: 'foo' (choose from 'data', 'sys', 'config', 'premain')")
 
     def test_debug_sys(self):
         self.command_line("debug sys")
         out = self.stdout()
-        assert "version:" in out
-        assert "data_file:" in out
+        assert "version:" in out, f"Full output:\n{out}"
+        assert "data_file:" in out, f"Full output:\n{out}"
 
     def test_debug_config(self):
         self.command_line("debug config")
         out = self.stdout()
-        assert "cover_pylib:" in out
-        assert "skip_covered:" in out
-        assert "skip_empty:" in out
+        assert "cover_pylib:" in out, f"Full output:\n{out}"
+        assert "skip_covered:" in out, f"Full output:\n{out}"
+        assert "skip_empty:" in out, f"Full output:\n{out}"
 
     def test_erase(self):
         # coverage erase
@@ -274,19 +273,19 @@ class CmdLineTest(BaseCmdLineTest):
 
     def test_version(self):
         # coverage --version
-        self.cmd_help("--version", topic="version", ret=OK)
+        self.cmd_outputs("--version", output="Coverage.py, version", ret=OK)
 
     def test_help_option(self):
         # coverage -h
-        self.cmd_help("-h", topic="help", ret=OK)
-        self.cmd_help("--help", topic="help", ret=OK)
+        self.cmd_outputs("-h", output="Measure, collect, and report", ret=OK)
+        self.cmd_outputs("--help", output="Measure, collect, and report", ret=OK)
 
     def test_help_command(self):
-        self.cmd_executes("help", "show_help(topic='help')")
+        self.cmd_outputs("help", output="Measure, collect, and report", ret=OK)
 
     def test_cmd_help(self):
-        self.cmd_executes("run --help", "show_help(parser='<CmdOptionParser:run>')")
-        self.cmd_executes_same("help run", "run --help")
+        self.cmd_outputs("run --help", "Run a Python program", ret=OK)
+        self.cmd_outputs("help run", "Run a Python program", ret=OK)
 
     def test_html(self):
         # coverage html -d DIR [-i] [--omit DIR,...] [FILE1 FILE2 ...]
@@ -341,7 +340,7 @@ class CmdLineTest(BaseCmdLineTest):
         self.cmd_executes("report", """\
             cov = Coverage()
             cov.load()
-            cov.report(show_missing=None)
+            cov.report(show_missing=False)
             """)
         self.cmd_executes("report -i", """\
             cov = Coverage()
@@ -529,7 +528,7 @@ class CmdLineTest(BaseCmdLineTest):
     def test_bad_concurrency(self):
         self.command_line("run --concurrency=nothing", ret=ERR)
         err = self.stderr()
-        assert "option --concurrency: invalid choice: 'nothing'" in err
+        assert "argument --concurrency: invalid choice: 'nothing'" in err, f"Full output:\n{err}"
 
     def test_no_multiple_concurrency(self):
         # You can't use multiple concurrency values on the command line.
@@ -537,7 +536,7 @@ class CmdLineTest(BaseCmdLineTest):
         # values for this option, but optparse is not that flexible.
         self.command_line("run --concurrency=multiprocessing,gevent foo.py", ret=ERR)
         err = self.stderr()
-        assert "option --concurrency: invalid choice: 'multiprocessing,gevent'" in err
+        assert "argument --concurrency: invalid choice: 'multiprocessing,gevent'" in err, f"Full output:\n{err}"
 
     def test_multiprocessing_needs_config_file(self):
         # You can't use command-line args to add options to multiprocessing
@@ -545,9 +544,9 @@ class CmdLineTest(BaseCmdLineTest):
         # config file.
         self.command_line("run --concurrency=multiprocessing --branch foo.py", ret=ERR)
         msg = "Options affecting multiprocessing must only be specified in a configuration file."
-        _, err = self.stdouterr()
-        assert msg in err
-        assert "Remove --branch from the command line." in err
+        err = self.stderr()
+        assert msg in err, f"Full output:\n{err}"
+        assert "Remove --branch from the command line." in err, f"Full output:\n{err}"
 
     def test_run_debug(self):
         self.cmd_executes("run --debug=opt1 foo.py", """\
@@ -599,10 +598,6 @@ class CmdLineTest(BaseCmdLineTest):
             """)
         self.cmd_executes_same("run -m mymodule", "run --module mymodule")
 
-    def test_run_nothing(self):
-        self.command_line("run", ret=ERR)
-        assert "Nothing to do" in self.stderr()
-
     def test_run_from_config(self):
         options = {"run:command_line": "myprog.py a 123 'a quoted thing' xyz"}
         self.cmd_executes("run", """\
@@ -637,21 +632,6 @@ class CmdLineTest(BaseCmdLineTest):
             """,
             ret=ERR,
             options={"run:command_line": ""},
-            )
-
-    def test_run_dashm_only(self):
-        self.cmd_executes("run -m", """\
-            cov = Coverage()
-            show_help('No module specified for -m')
-            """,
-            ret=ERR,
-            )
-        self.cmd_executes("run -m", """\
-            cov = Coverage()
-            show_help('No module specified for -m')
-            """,
-            ret=ERR,
-            options={"run:command_line": "myprog.py"}
             )
 
     def test_cant_append_parallel(self):
@@ -755,10 +735,10 @@ class CmdLineTest(BaseCmdLineTest):
             """)
 
     def test_no_arguments_at_all(self):
-        self.cmd_help("", topic="minimum_help", ret=OK)
+        self.cmd_outputs("", output="Code coverage for Python", ret=OK)
 
     def test_bad_command(self):
-        self.cmd_help("xyzzy", "Unknown command: 'xyzzy'")
+        self.cmd_outputs("xyzzy", "invalid choice: 'xyzzy'")
 
 
 class CmdLineWithFilesTest(BaseCmdLineTest):
@@ -802,17 +782,17 @@ class CmdLineStdoutTest(BaseCmdLineTest):
     def test_minimum_help(self):
         self.command_line("")
         out = self.stdout()
-        assert "Code coverage for Python" in out
+        assert "Code coverage for Python" in out, f"Full output:\n{out}"
         assert out.count("\n") < 4
 
     def test_version(self):
         self.command_line("--version")
         out = self.stdout()
-        assert "ersion " in out
+        assert "ersion " in out, f"Full output:\n{out}"
         if env.C_TRACER:
-            assert "with C extension" in out
+            assert "with C extension" in out, f"Full output:\n{out}"
         else:
-            assert "without C extension" in out
+            assert "without C extension" in out, f"Full output:\n{out}"
         assert out.count("\n") < 4
 
     @pytest.mark.skipif(env.JYTHON, reason="Jython gets mad if you patch sys.argv")
@@ -824,7 +804,7 @@ class CmdLineStdoutTest(BaseCmdLineTest):
         with mock.patch.object(sys, 'argv', new=fake_argv):
             self.command_line("help")
         out = self.stdout()
-        assert expected_command_name in out
+        assert expected_command_name in out, f"Full output:\n{out}"
 
     @pytest.mark.skipif(env.JYTHON, reason="Jython gets mad if you patch sys.argv")
     def test_help_contains_command_name_from_package(self):
@@ -840,7 +820,7 @@ class CmdLineStdoutTest(BaseCmdLineTest):
         with mock.patch.object(sys, 'argv', new=fake_argv):
             self.command_line("help")
         out = self.stdout()
-        assert expected_command_name in out
+        assert expected_command_name in out, f"Full output:\n{out}"
 
     def test_help(self):
         self.command_line("help")
@@ -852,23 +832,21 @@ class CmdLineStdoutTest(BaseCmdLineTest):
         self.command_line("help run")
         out = self.stdout()
         lines = out.splitlines()
-        assert "<pyfile>" in lines[0]
-        assert "--timid" in out
+        assert "PYFILE" in out
+        assert "--timid" in out, f"Full output:\n{out}"
         assert len(lines) > 20
         assert lines[-1] == f"Full documentation is at {__url__}"
 
     def test_unknown_topic(self):
-        # Should probably be an ERR return, but meh.
-        self.command_line("help foobar")
-        lines = self.stdout().splitlines()
-        assert lines[0] == "Don't know topic 'foobar'"
-        assert lines[-1] == f"Full documentation is at {__url__}"
+        self.command_line("help foobar", ret=ERR)
+        lines = self.stderr().splitlines()
+        assert "argument topic: invalid choice: 'foobar'" in lines[2]
 
     def test_error(self):
         self.command_line("fooey kablooey", ret=ERR)
         err = self.stderr()
-        assert "fooey" in err
-        assert "help" in err
+        assert "fooey" in err, f"Full output:\n{err}"
+        assert "help" in err, f"Full output:\n{err}"
 
     def test_doc_url(self):
         assert __url__.startswith("https://coverage.readthedocs.io")
