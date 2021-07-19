@@ -435,7 +435,10 @@ class Coverage:
                 raise CoverageException(                    # pragma: only jython
                     "multiprocessing is not supported on this Python"
                 )
-            patch_multiprocessing(rcfile=self.config.config_file)
+            patch_multiprocessing(
+                rcfile=self.config.config_file,
+                static_context=self.config.context or ""
+            )
 
         dycon = self.config.dynamic_context
         if not dycon or dycon == "none":

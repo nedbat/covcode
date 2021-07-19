@@ -27,7 +27,10 @@ class ProcessWithCoverage(OriginalProcess):         # pylint: disable=abstract-m
         """Wrapper around _bootstrap to start coverage."""
         try:
             from coverage import Coverage       # avoid circular import
-            cov = Coverage(data_suffix=True)
+            cov = Coverage(
+                data_suffix=True,
+                context=os.environ.get("COVERAGE_STATIC_CONTEXT") or None
+            )
             cov._warn_preimported_source = False
             cov.start()
             debug = cov._debug
@@ -50,18 +53,19 @@ class ProcessWithCoverage(OriginalProcess):         # pylint: disable=abstract-m
 
 class Stowaway:
     """An object to pickle, so when it is unpickled, it can apply the monkey-patch."""
-    def __init__(self, rcfile):
+    def __init__(self, rcfile, static_context):
         self.rcfile = rcfile
+        self.static_context = static_context
 
     def __getstate__(self):
-        return {'rcfile': self.rcfile}
+        return {'rcfile': self.rcfile, "static_context": self.static_context}
 
     def __setstate__(self, state):
-        patch_multiprocessing(state['rcfile'])
+        patch_multiprocessing(state['rcfile'], state["static_context"])
 
 
-@contract(rcfile=str)
-def patch_multiprocessing(rcfile):
+@contract(rcfile=str, static_context=str)
+def patch_multiprocessing(rcfile, static_context):
     """Monkey-patch the multiprocessing module.
 
     This enables coverage measurement of processes started by multiprocessing.
@@ -79,6 +83,7 @@ def patch_multiprocessing(rcfile):
     # Set the value in ProcessWithCoverage that will be pickled into the child
     # process.
     os.environ["COVERAGE_RCFILE"] = os.path.abspath(rcfile)
+    os.environ["COVERAGE_STATIC_CONTEXT"] = static_context
 
     # When spawning processes rather than forking them, we have no state in the
     # new process.  We sneak in there with a Stowaway: we stuff one of our own
@@ -95,7 +100,7 @@ def patch_multiprocessing(rcfile):
         def get_preparation_data_with_stowaway(name):
             """Get the original preparation data, and also insert our stowaway."""
             d = original_get_preparation_data(name)
-            d['stowaway'] = Stowaway(rcfile)
+            d['stowaway'] = Stowaway(rcfile, static_context)
             return d
 
         spawn.get_preparation_data = get_preparation_data_with_stowaway
