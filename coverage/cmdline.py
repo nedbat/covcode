@@ -113,6 +113,10 @@ class Opts:
         '--show-contexts', action='store_true',
         help="Show contexts for covered lines.",
     )
+    show_omit = optparse.make_option(
+        '--show-omit', action='store_true',
+        help="Show omit entries in coverage config files.",
+    )
     omit = optparse.make_option(
         '', '--omit', action='store',
         metavar="PAT1,PAT2,...",
@@ -211,6 +215,7 @@ class CoverageOptionParser(optparse.OptionParser):
             append=None,
             branch=None,
             concurrency=None,
+            config=None,
             context=None,
             debug=None,
             directory=None,
@@ -230,6 +235,7 @@ class CoverageOptionParser(optparse.OptionParser):
             skip_covered=None,
             skip_empty=None,
             show_contexts=None,
+            show_omit=None,
             sort=None,
             source=None,
             timid=None,
@@ -347,6 +353,20 @@ CMDS = {
             "arguments are data files or directories containing data files. "
             "If no paths are provided, data files in the default data file's "
             "directory are combined."
+        ),
+    ),
+
+    'config': CmdOptionParser(
+        "config",
+        [
+            Opts.show_omit,
+            Opts.output_json,
+        ] + GLOBAL_ARGS,
+        usage="[options] [modules]",
+        description=(
+            "Get current configuration. "
+            "Topics are: "
+                "'omit' to show configuration omit entries in list format; "
         ),
     ),
 
@@ -608,6 +628,18 @@ class CoverageScript:
         sys.path.insert(0, '')
 
         self.coverage.load()
+
+        if options.action == "config":
+            # Allows end user to see omit settings
+            # Useful since there are several configuration files in many different formats
+            # Which do environment variable expansion, etc
+            if options.show_omit:
+                if options.outfile == "json":
+                    print(self.coverage.config.run_omit)
+                else:
+                    joined_string = ",".join(self.coverage.config.run_omit)
+                    print(joined_string)
+            return OK
 
         total = None
         if options.action == "report":

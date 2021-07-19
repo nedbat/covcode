@@ -34,6 +34,9 @@ class BaseCmdLineTest(CoverageTest):
         directory=None, ignore_errors=None, include=None, omit=None, morfs=[],
         contexts=None,
     )
+    _defaults.Coverage().config(
+        show_omit=None, json=None
+    )
     _defaults.Coverage().html_report(
         directory=None, ignore_errors=None, include=None, omit=None, morfs=[],
         skip_covered=None, show_contexts=None, title=None, contexts=None,
@@ -251,6 +254,11 @@ class CmdLineTest(BaseCmdLineTest):
     def test_debug(self):
         self.cmd_help("debug", "What information would you like: config, data, sys, premain?")
         self.cmd_help("debug foo", "Don't know what you mean by 'foo'")
+
+    def test_config(self):
+        self.command_line("config")
+        out = self.stdout()
+        assert "" in out
 
     def test_debug_sys(self):
         self.command_line("debug sys")
