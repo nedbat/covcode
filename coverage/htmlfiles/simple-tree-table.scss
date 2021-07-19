@@ -1,0 +1,19 @@
+$NAMESPACE: simple-tree-table;
+
+.#{$NAMESPACE} {
+  &-icon {
+    display: inline-block;
+    width: 1.5em;
+    line-height: 1.5em;
+    margin: 0.1em;
+    background-color: #eee;
+    text-align: center;
+    cursor: pointer;
+  }
+  &-opened &-icon:after {
+    content: '-';
+  }
+  &-closed &-icon:after {
+    content: '+';
+  }
+}
