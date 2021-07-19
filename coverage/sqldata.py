@@ -71,6 +71,7 @@ CREATE TABLE context (
     id integer primary key,
     context text,
     unique (context)
+    ON CONFLICT IGNORE
 );
 
 CREATE TABLE line_bits (
