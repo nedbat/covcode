@@ -477,6 +477,44 @@ compatible with `Cobertura`_.
 
 You can specify the name of the output file with the ``-o`` switch.
 
+To include complete file paths in the output file, rather than just
+the file name, use [include] vs [source] in your ".coveragerc" file.
+
+For example, use this:
+
+.. code:: ini
+
+    [run]
+    include =
+        foo/*
+        bar/*
+
+
+which will result in
+
+.. code:: xml
+
+    <class branch-rate="0" complexity="0" filename="bar/hello.py" line-rate="1" name="hello.py">
+    <class branch-rate="0" complexity="0" filename="bar/baz/hello.py" line-rate="1" name="hello.py">
+    <class branch-rate="0" complexity="0" filename="foo/hello.py" line-rate="1" name="hello.py">
+
+in place of this:
+
+.. code:: ini
+
+    [run]
+    source =
+        foo
+        bar
+
+which may result in
+
+.. code:: xml
+
+    <class branch-rate="0" complexity="0" filename="hello.py" line-rate="1" name="hello.py">
+    <class branch-rate="0" complexity="0" filename="baz/hello.py" line-rate="1" name="hello.py">
+
+
 Other common reporting options are described above in :ref:`cmd_reporting`.
 
 
